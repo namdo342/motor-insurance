@@ -55,6 +55,22 @@ honest negative result: a hypothesised age x vehicle-power interaction from
 an earlier synthetic-data pass did not clearly replicate on the real data,
 reported as such rather than reshaped until it did.
 
+## Power BI
+
+No `.pbix` is included (this sandbox has no Power BI Desktop to build one in).
+`powerbi_exports/` has clean, import-ready CSVs instead:
+
+- `frequency_by_age_band.csv` — actual vs. GLM vs. GBM frequency by age band
+- `segment_scan_bonusmalus_power.csv` — the BonusMalus x VehPower scan (the honest negative result)
+- `feature_importance_frequency.csv` — permutation importance for the tree model
+- `policy_level_sample.csv` — 20,000-row policy-level sample for drill-through
+
+**Suggested build:** a line chart of actual/GLM/GBM frequency by `age_band`
+(recreates `figures/frequency_by_age.png` natively); a table on
+`segment_scan_bonusmalus_power` with conditional formatting on `glm_gap_pct`
+to surface where the GLM misses at a glance; a bar chart of
+`feature_importance_frequency`.
+
 ## Output
 
 - `data/data_quality_report.md` — every cleaning decision, with counts
