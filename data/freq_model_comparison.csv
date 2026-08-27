@@ -1,0 +1,3 @@
+model,poisson_deviance,MAE_claims
+Poisson GLM,0.3231411651443968,0.0988256078201564
+Gradient-boosted trees,0.3053528650772684,0.09608553205538212

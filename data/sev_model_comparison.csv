@@ -1,0 +1,3 @@
+model,gamma_deviance,MAE_severity
+Gamma GLM,1.1264871971526098,1252.420241152241
+Gradient-boosted trees,1.1181028418972758,1221.6140312522682

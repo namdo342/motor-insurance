@@ -1,0 +1,4 @@
+PORTFOLIO TIE-OUT (real test set, 135,603 policies, 71,710 exposure-years)
+  Actual total incurred (capped):     8,684,515
+  GLM  predicted total pure premium:  12,332,219   (+42.00%)
+  GBM  predicted total pure premium:  11,919,351   (+37.25%)
