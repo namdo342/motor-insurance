@@ -1,79 +1,41 @@
-# Motor Insurance Risk Analysis — GLM vs. Gradient-Boosted Trees
+Motor Insurance Risk Analysis
+Why I built this
 
-A frequency-severity claims-pricing pipeline (the standard actuarial pricing
-setup) — Poisson GLM for claim frequency, Gamma GLM for claim severity —
-benchmarked against a gradient-boosted-tree challenger, on the real French
-Motor Third-Party Liability dataset (678,013 policies, ~2011-2013).
+I interned at an insurance company over the summer, reconciling claims and checking the calculations behind how a policy gets priced. Those prices come from a GLM, a fairly old but well-trusted statistical model. I wanted to know what a more flexible model would actually say about the same risk, so I got the real dataset this kind of pricing research is usually done on and built one myself.
 
-## Data
+The data
 
-Not included in this repo (37-48MB per file — see `.gitignore`). Download from
-either source, then drop both CSVs into `data/`:
+678,013 real French motor insurance policies from around 2011-2013 (OpenML dataset 41214, originally from Dutang & Charpentier's CASdatasets). Not included in this repo directly, the files are 37-48MB each, download from Hugging Face (easiest, plain CSV) or the original OpenML page, then drop both CSVs into data/.
 
-- **Easiest (plain CSV):** https://huggingface.co/datasets/mabilton/fremtpl2
-- **Original source:** https://www.openml.org/d/41214 (OpenML dataset 41214;
-  C. Dutang & A. Charpentier, *CASdatasets*)
+What I actually did
 
-Expected files: `data/freMTPL2freq.csv` (678,013 rows, policy risk factors)
-and `data/freMTPL2sev.csv` (26,639 rows, claim amounts, linked by `IDpol`).
+The first step was just cleaning the thing, and that turned out to be more interesting than I expected. Merging the two source tables, policies and claims, surfaced a real defect that's actually documented in the literature on this exact dataset: 9,116 policies show a claim on file but have no matching payment record anywhere. I kept those policies for frequency modelling, the claim count itself is still valid, but excluded them from the severity model, since there's no amount to train on there.
 
-## Run
+Once the data was clean, I built a Poisson GLM for claim frequency and a Gamma GLM for claim severity, the standard actuarial approach, then a gradient-boosted-tree version of each to compare against. Same target, same held-out test set, just a different way of representing how the risk factors relate to the outcome.
 
-```bash
+What I found
+
+Averaged across the whole book, the two models barely disagree. The tree beats the GLM by about 5.5% on frequency deviance, a gap small enough that you could reasonably conclude the extra complexity isn't worth it.
+
+Except that's the wrong conclusion. Broken down by driver age, the GLM underprices the youngest drivers, 18 to 22, by 26%, a gap that's completely invisible in the aggregate number. Two errors in opposite directions can cancel out on average and still cost real money on the one segment where it actually matters.
+
+I also want to flag something that didn't work. An earlier version of this, run on simulated data, was built around the idea that young drivers in high-powered cars specifically would show the biggest gap. That interaction didn't clearly show up once I moved to the real data. I'm reporting that as a negative result rather than reshaping the analysis until it matched the story I expected going in.
+
+One more thing worth mentioning: the portfolio total looked off by 37-42% at first, which would normally point to a real problem with the models. It wasn't the models. Only 72.6% of the claims in the data have a linked payment amount, the same defect mentioned above, so the "actual" total is itself an undercount. Correct for that and both models land within a few percent of the true total.
+
+Running it
+bash
 pip install pandas numpy scikit-learn matplotlib joblib
 python3 motor_insurance_risk_analysis.py
-```
 
-Single file, structured as Databricks notebook cells (`# COMMAND ----------`)
-so it also imports directly as a Databricks notebook. Runs in under a minute
-on the full 678k-row dataset.
+Runs in under a minute on the full dataset. It's written as a single file with Databricks-style cell markers (# COMMAND ----------), so it imports directly as a notebook too if that's more useful.
 
-## What it does
+Power BI
 
-1. **Cleans and merges** `freMTPL2freq` + `freMTPL2sev`, including surfacing
-   a published data-linkage defect in this exact dataset (9,116 policies with
-   a claim count but no matching severity record), documented in
-   `data/data_quality_report.md` after running.
-2. **Fits a Poisson GLM** (frequency, exposure-weighted) and a **Gamma GLM**
-   (severity), the actuarial-industry-standard approach.
-3. **Fits a gradient-boosted-tree challenger** (`HistGradientBoostingRegressor`,
-   native Poisson/Gamma loss, the closest sklearn equivalent to XGBoost's
-   `count:poisson` / `reg:gamma` objectives) on the same targets.
-4. **Evaluates both on a held-out test set** via Poisson/Gamma deviance, then
-   drills into segments (driver age, BonusMalus x VehPower) to find where the
-   two disagree, not just whether they do on average.
-5. **Reconciles the portfolio total** against actual incurred losses as a
-   sanity check, and explains an apparent 37-42% "miss" that turns out to be
-   a data-coverage artefact, not a model failure.
+I haven't built the actual .pbix file yet. powerbi_exports/ has the cleaned, aggregated CSVs ready to go: frequency_by_age_band.csv, feature_importance_frequency.csv, segment_scan_bonusmalus_power.csv, and a 20,000-row policy_level_sample.csv for drill-through.
 
-## Headline result
+A line chart of frequency by age band recreates the main finding directly. The segment scan file is worth a table with conditional formatting on glm_gap_pct, so where the GLM misses jumps out at a glance.
 
-The gradient-boosted model beats the GLM by ~5.5% on frequency deviance
-overall. Broken down by driver age, the GLM underprices the youngest drivers
-(18-22) by **26%**, a gap invisible in the aggregate metric. Also includes an
-honest negative result: a hypothesised age x vehicle-power interaction from
-an earlier synthetic-data pass did not clearly replicate on the real data,
-reported as such rather than reshaped until it did.
+What's in the repo
 
-## Power BI
-
-No `.pbix` is included (this sandbox has no Power BI Desktop to build one in).
-`powerbi_exports/` has clean, import-ready CSVs instead:
-
-- `frequency_by_age_band.csv` — actual vs. GLM vs. GBM frequency by age band
-- `segment_scan_bonusmalus_power.csv` — the BonusMalus x VehPower scan (the honest negative result)
-- `feature_importance_frequency.csv` — permutation importance for the tree model
-- `policy_level_sample.csv` — 20,000-row policy-level sample for drill-through
-
-**Suggested build:** a line chart of actual/GLM/GBM frequency by `age_band`
-(recreates `figures/frequency_by_age.png` natively); a table on
-`segment_scan_bonusmalus_power` with conditional formatting on `glm_gap_pct`
-to surface where the GLM misses at a glance; a bar chart of
-`feature_importance_frequency`.
-
-## Output
-
-- `data/data_quality_report.md` — every cleaning decision, with counts
-- `figures/frequency_by_age.png`, `figures/feature_importance.png`
-- `powerbi_exports/*.csv` — aggregated tables for Power BI / further analysis
-- `portfolio_tie_out.txt`
+motor_insurance_risk_analysis.py is the whole pipeline. data/data_quality_report.md has every cleaning decision with counts. figures/ has the two charts referenced above, portfolio_tie_out.txt has the reconciliation numbers, and powerbi_exports/ has the CSVs.
